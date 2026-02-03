@@ -1,1 +1,1 @@
-from gymnasium_env.envs.grid_world import GridWorldEnv
+from cliffwalking_env.envs.cliff_walking import CliffWalkingEnv
