@@ -13,12 +13,25 @@ class Actions(Enum):
 
 
 class CliffWalkingEnv(gym.Env):
-    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 60}
 
     def __init__(self, render_mode=None, size=(12,4)):
         self.xsize, self.ysize = size
         self.window_xsize = 3 * 512
         self.window_ysize = 512
+
+        # Start and goal locations
+        # Start from bottom left corner
+        self.start = np.array([0, self.ysize - 1], dtype=int)
+        self.goal = np.array([self.xsize - 1, self.ysize - 1], dtype=int)
+
+        # All cells between start and goal on the bottom row are cliff cells.
+        # implement self.cliffPositions = [(i, self.height-1) for i in range(1, self.width-1)]
+        self.cliff_cells = [(x, self.ysize - 1) for x in range(1,self.xsize - 1)]
+
+        # Rewards
+        self.step_reward = -1
+        self.cliff_penalty = -100
 
         # Observations are dictionaries with the agent's and the target's location.
         # Each location is encoded as an element of {0, ..., `size`}^2,
@@ -40,9 +53,9 @@ class CliffWalkingEnv(gym.Env):
         """
         self._action_to_direction = {
             Actions.right.value: np.array([1, 0]),
-            Actions.up.value: np.array([0, 1]),
+            Actions.up.value: np.array([0, -1]),
             Actions.left.value: np.array([-1, 0]),
-            Actions.down.value: np.array([0, -1]),
+            Actions.down.value: np.array([0, 1]),
         }
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
@@ -72,16 +85,9 @@ class CliffWalkingEnv(gym.Env):
         # We need the following line to seed self.np_random
         super().reset(seed=seed)
 
-        # Choose the agent's location uniformly at random
-        self._agent_location = self.np_random.integers(0, np.array([self.xsize, self.ysize]), size=2, dtype=int)
-
-        # We will sample the target's location randomly until it does not
-        # coincide with the agent's location
-        self._target_location = self._agent_location
-        while np.array_equal(self._target_location, self._agent_location):
-            self._target_location = self.np_random.integers(
-                0, np.array([self.xsize, self.ysize]), size=2, dtype=int
-            )
+        # Start/goal locations for CliffWalking
+        self._agent_location = self.start.copy()
+        self._target_location = self.goal.copy()
 
         observation = self._get_obs()
         info = self._get_info()
@@ -98,9 +104,17 @@ class CliffWalkingEnv(gym.Env):
         self._agent_location = np.clip(
             self._agent_location + direction, a_min=np.array([0,0]), a_max=np.array([self.xsize-1,self.ysize-1])
         )
-        # An episode is done iff the agent has reached the target
-        terminated = np.array_equal(self._agent_location, self._target_location)
-        reward = 1 if terminated else 0  # Binary sparse rewards
+        # Termination/reward logic
+        pos_tuple = (int(self._agent_location[0]), int(self._agent_location[1]))
+
+        # Stepping onto the cliff ends the episode with a penalty
+        if pos_tuple in self.cliff_cells:
+            terminated = True
+            reward = self.cliff_penalty
+        else:
+            # Reaching the goal ends the episode
+            terminated = np.array_equal(self._agent_location, self._target_location)
+            reward = 0 if terminated else self.step_reward
         observation = self._get_obs()
         info = self._get_info()
 
@@ -143,6 +157,17 @@ class CliffWalkingEnv(gym.Env):
             (self._agent_location + 0.5) * pix_square_size,
             pix_square_size / 3,
         )
+
+        # Draw cliff cells (black) for visualization
+        for (cx, cy) in self.cliff_cells:
+            pygame.draw.rect(
+                canvas,
+                (0, 0, 0),
+                pygame.Rect(
+                    (cx * pix_square_size, cy * pix_square_size),
+                    (pix_square_size, pix_square_size),
+                ),
+            )
 
         # Finally, add some gridlines
         for x in range(self.xsize + 1):
