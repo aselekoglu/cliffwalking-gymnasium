@@ -76,8 +76,8 @@ for i in range(episodes):
     time.sleep(0.3)
 
 # add matplotlib code to plot the episode returns (cumulative total reward) and the steps per episode
-plt.plot(list(episode_returns.values()), label="Episode Rewards")
-plt.plot(list(episode_steps.values()), label="Steps per Episode")
+plt.plot(list(episode_returns.values()), label="Rewards per Episode", marker='o', linewidth=2, )
+plt.plot(list(episode_steps.values()), label="Steps per Episode", marker='o', linewidth=2,)
 plt.xlabel("Episode")
 plt.ylabel("Reward")
 plt.minorticks_on()
